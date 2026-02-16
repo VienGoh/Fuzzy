@@ -2,27 +2,28 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useMemo } from "react"
 
-type Role = "ADMIN" | "RESEARCHER"
+type Role = "ADMIN" | "PENELITI"
 
 const menuItems = [
-  { href: "/dashboard", label: "Dashboard", role: ["ADMIN", "RESEARCHER"] },
-  { href: "/respondents", label: "Responden", role: ["ADMIN", "RESEARCHER"] },
-  { href: "/surveys", label: "Survei", role: ["ADMIN", "RESEARCHER"] },
-  { href: "/analysis", label: "Analisis", role: ["ADMIN", "RESEARCHER"] },
-  { href: "/visualization", label: "Visualisasi", role: ["ADMIN", "RESEARCHER"] },
-  // { href: "/admin", label: "Admin", role: ["ADMIN"] }, // Uncomment jika ada
+  { href: "/dashboard", label: "Dashboard", role: ["ADMIN", "PENELITI"] },
+  { href: "/products", label: "Produk", role: ["ADMIN", "PENELITI"] },
+  { href: "/fuzzy", label: "Input Fuzzy", role: ["ADMIN", "PENELITI"] },
+  { href: "/results", label: "Hasil", role: ["ADMIN", "PENELITI"] },
+  // { href: "/admin", label: "Admin", role: ["ADMIN"] }, // jika perlu
 ]
 
 export default function Nav({ role }: { role: Role }) {
   const pathname = usePathname()
   
-  const filteredMenu = menuItems.filter(item => 
-    item.role.includes(role)
+  const filteredMenu = useMemo(() => 
+    menuItems.filter(item => item.role.includes(role)),
+    [role]
   )
 
   return (
-    <nav className="flex gap-1 border-b">
+    <nav className="flex gap-1 border-b bg-white px-4">
       {filteredMenu.map((item) => {
         const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
         

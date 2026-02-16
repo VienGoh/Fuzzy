@@ -1,8 +1,9 @@
 "use client"
 
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect } from "react"
+import Nav from "@/components/forms/Nav" // Pastikan path sesuai dengan lokasi komponen Nav
 
 export default function ProtectedLayout({ 
   children 
@@ -38,17 +39,22 @@ export default function ProtectedLayout({
 
   // Jika sudah authenticated, tampilkan konten
   if (status === "authenticated" && session) {
+    // Ambil role dari session, default ke RESEARCHER jika tidak ada
+    const role = (session.user?.role as "ADMIN" | "RESEARCHER") || "RESEARCHER"
+
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Simple Header */}
         <header className="bg-white border-b shadow-sm">
           <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 className="font-bold text-xl">EUCS Dashboard</h1>
-            <div className="text-sm text-gray-600">
-              {session.user?.email} • {session.user?.role}
+            <h1 className="font-bold text-xl">Fuzzy Discount Dashboard</h1>
+            <div className="text-sm text-gray-600 flex items-center gap-4">
+              <span>
+                {session.user?.email} • {session.user?.role}
+              </span>
               <button 
-                onClick={() => router.push('/api/auth/signout')}
-                className="ml-4 px-3 py-1 bg-red-100 text-red-600 rounded text-sm hover:bg-red-200"
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm hover:bg-red-200"
               >
                 Logout
               </button>
@@ -56,16 +62,8 @@ export default function ProtectedLayout({
           </div>
         </header>
 
-        {/* Simple Navigation */}
-        <nav className="bg-white border-b">
-          <div className="container mx-auto px-4 py-2 flex gap-4">
-            <a href="/dashboard" className="px-4 py-2 hover:bg-gray-100 rounded">Dashboard</a>
-            <a href="/respondents" className="px-4 py-2 hover:bg-gray-100 rounded">Responden</a>
-            <a href="/surveys" className="px-4 py-2 hover:bg-gray-100 rounded">Survei</a>
-            <a href="/analysis" className="px-4 py-2 hover:bg-gray-100 rounded">Analisis</a>
-            <a href="/visualization" className="px-4 py-2 hover:bg-gray-100 rounded">Visualisasi</a>
-          </div>
-        </nav>
+        {/* Navigasi menggunakan komponen Nav */}
+        <Nav role={role} />
 
         {/* Main Content */}
         <main className="container mx-auto px-4 py-6">
@@ -73,7 +71,7 @@ export default function ProtectedLayout({
         </main>
 
         <footer className="mt-8 border-t pt-4 text-center text-sm text-gray-500">
-          © 2024 EUCS Research System
+          © 2024 Fuzzy Discount System
         </footer>
       </div>
     )

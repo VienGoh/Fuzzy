@@ -3,217 +3,153 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "sqlite"     // bisa diganti dengan "postgresql" atau "mysql"
   url      = env("DATABASE_URL")
 }
 
-// ====================
-// TABEL UTAMA
-// ====================
+// ==============================
+// Enums
+// ==============================
+enum Role {
+  ADMIN
+  PENELITI
+}
 
-// Admin/Peneliti
+// ==============================
+// Auth/User
+// ==============================
 model User {
   id        String   @id @default(cuid())
+  name      String?
   email     String   @unique
   password  String
-  name      String
-  role      UserRole @default(RESEARCHER)
+  role      Role     @default(PENELITI)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+}
+// ==================== ENTITAS UTAMA ====================
+
+model Product {
+  id               Int      @id @default(autoincrement())
+  productId        Int      @unique @map("product_id")         // ID asli dari CSV (Product_ID)
+  name             String   @map("name")
+  category         String?
+  brand            String?
+  season           String?
+  originalPrice    Float    @map("original_price")
+  competitorPrice  Float?   @map("competitor_price")
+  optimalDiscount  Float?   @map("optimal_discount")           // dari kolom "Optimal Discount"
+
   // Relasi
-  surveys Survey[]
-  exports Export[]
-  
-  @@map("users")
+  metrics          ProductMetric?
+  promotions       Promotion[]
+  salesHistory     SalesHistory[]
+  discountResults  DiscountResult[]
+
+  @@map("products")
 }
 
-enum UserRole {
-  RESEARCHER
-  ADMIN
-}
+model ProductMetric {
+  id                Int     @id @default(autoincrement())
+  productId         Int     @unique @map("product_id")
+  stockLevel        Int     @map("stock_level")                // dari Stock_Level
+  seasonalityFactor Float   @map("seasonality_factor")         // dari Seasonality_Factor
+  returnRate        Float   @map("return_rate")                // dari Return Rate
+  customerRatings   Float   @map("customer_ratings")           // dari Customer Ratings
 
-// Responden Penelitian
-model Respondent {
-  id              String   @id @default(cuid())
-  name            String
-  age             Int
-  gender          String   // "Laki-laki" | "Perempuan"
-  email           String?  @unique
-  phone           String?
-  occupation      String
-  education       String?
-  incomeRange     String?  // "< 3jt", "3-5jt", "5-10jt", "> 10jt"
-  tiktokUsage     Int      // 1-5 (Likert Scale)
-  tiktokShopUsage Int      // 1-5 (Likert Scale)
-  lastPurchase    DateTime
-  createdAt       DateTime @default(now())
-  
   // Relasi
-  surveys Survey[]
-  
-  @@map("respondents")
+  product           Product @relation(fields: [productId], references: [id])
+
+  @@map("product_metrics")
 }
 
-// Kuesioner/Survei
-model Survey {
-  id           String   @id @default(cuid())
-  respondentId String
-  researcherId String
-  completed    Boolean  @default(false)
-  completedAt  DateTime?
-  createdAt    DateTime @default(now())
-  
+model LoyaltyLevel {
+  id        Int     @id @default(autoincrement())
+  levelName String  @map("level_name")   // misal: Rendah, Sedang, Tinggi
+  minValue  Float   @map("min_value")     // batas bawah nilai loyalitas
+  maxValue  Float   @map("max_value")     // batas atas nilai loyalitas
+
+  @@map("loyalty_levels")
+}
+
+model Promotion {
+  id             Int       @id @default(autoincrement())
+  productId      Int       @map("product_id")
+  markdownValue  Float     @map("markdown_value")   // nilai diskon dari Markdown_1..4
+  promotionType  String    @map("promotion_type")   // dari Promotion_Type
+  markdownLevel  Int       @map("markdown_level")   // level markdown (1..4)
+  startDate      DateTime? @map("start_date")
+  endDate        DateTime? @map("end_date")
+
   // Relasi
-  respondent Respondent @relation(fields: [respondentId], references: [id], onDelete: Cascade)
-  researcher User       @relation(fields: [researcherId], references: [id], onDelete: Cascade)
-  answers    Answer[]
-  analysis   Analysis?
-  
-  @@map("surveys")
+  product        Product   @relation(fields: [productId], references: [id])
+  salesHistory   SalesHistory[]
+
+  @@map("promotions")
 }
 
-// ====================
-// DIMENSI EUCS
-// ====================
+model SalesHistory {
+  id              Int       @id @default(autoincrement())
+  productId       Int       @map("product_id")
+  promotionId     Int?      @map("promotion_id")
+  salesAmount     Float     @map("sales_amount")               // jumlah penjualan pada tahap tertentu
+  stage           String    @map("stage")                      // 'historical', 'after_m1', 'after_m2', ...
+  date            DateTime? @default(now())
 
-// Dimensi EUCS dan Loyalty
-model Dimension {
-  id          String   @id @default(cuid())
-  name        String   @unique  // Content, Accuracy, Format, EaseOfUse, Timeliness, Loyalty
-  description String
-  indicators  String   // JSON string array
-  
   // Relasi
-  questions Question[]
-  
-  @@map("dimensions")
+  product         Product   @relation(fields: [productId], references: [id])
+  promotion       Promotion? @relation(fields: [promotionId], references: [id])
+
+  @@map("sales_history")
 }
 
-// Pertanyaan Kuesioner
-model Question {
-  id          String   @id @default(cuid())
-  dimensionId String
-  code        String   @unique  // Q1, Q2, ..., L1, L2
-  text        String
-  indicator   String   // Nama indikator
-  order       Int
-  
+// ==================== KONFIGURASI FUZZY LOGIC ====================
+
+model FuzzyVariable {
+  id          Int                @id @default(autoincrement())
+  variableName String             @map("variable_name") // stok, permintaan, loyalitas, diskon
+  variableType String             @map("variable_type")  // "input" atau "output"
+  description  String?
+
   // Relasi
-  dimension Dimension @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
-  answers   Answer[]
-  validityReliabilities ValidityReliability[] // TAMBAHKAN INI
-  
-  @@map("questions")
+  membershipFunctions MembershipFunction[]
+
+  @@map("fuzzy_variables")
 }
 
-// Jawaban Responden
-model Answer {
-  id         String   @id @default(cuid())
-  surveyId   String
-  questionId String
-  value      Int      // 1-5 (Likert Scale)
-  createdAt  DateTime @default(now())
-  
+model MembershipFunction {
+  id           Int           @id @default(autoincrement())
+  variableId   Int           @map("variable_id")
+  label        String        // rendah, sedang, tinggi
+  functionType String        @map("function_type") // "triangular", "trapezoidal", "gaussian"
+  parameters   Json?         // parameter fungsi dalam format JSON, misal {a:0, b:40, c:70}
+  minValue     Float?        @map("min_value")     // domain minimum (opsional)
+  maxValue     Float?        @map("max_value")     // domain maksimum (opsional)
+
   // Relasi
-  survey   Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  
-  @@unique([surveyId, questionId])
-  
-  @@map("answers")
+  variable     FuzzyVariable @relation(fields: [variableId], references: [id])
+
+  @@map("membership_functions")
 }
 
-// Hasil Analisis
-model Analysis {
-  id         String   @id @default(cuid())
-  surveyId   String   @unique
-  content    Float
-  accuracy   Float
-  format     Float
-  easeOfUse  Float
-  timeliness Float
-  loyalty    Float
-  totalScore Float
-  createdAt  DateTime @default(now())
-  
+model FuzzyRule {
+  id       Int     @id @default(autoincrement())
+  ruleText String  @map("rule_text") // contoh: "IF stok tinggi AND permintaan rendah THEN diskon besar"
+
+  @@map("fuzzy_rules")
+}
+
+// ==================== HASIL PERHITUNGAN ====================
+
+model DiscountResult {
+  id                 Int      @id @default(autoincrement())
+  productId          Int?     @map("product_id")
+  inputValues        Json     @map("input_values")   // menyimpan nilai stok, permintaan, loyalitas
+  calculatedDiscount Float    @map("calculated_discount")
+  timestamp          DateTime @default(now())
+
   // Relasi
-  survey Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  
-  @@map("analyses")
-}
+  product            Product? @relation(fields: [productId], references: [id])
 
-// ====================
-// FITUR TAMBAHAN
-// ====================
-
-// Visualisasi Chart
-model Visualization {
-  id        String   @id @default(cuid())
-  type      ChartType
-  data      Json
-  title     String
-  createdAt DateTime @default(now())
-  
-  @@map("visualizations")
-}
-
-enum ChartType {
-  BAR
-  PIE
-  HEATMAP
-  LINE
-}
-
-// Export History
-model Export {
-  id        String   @id @default(cuid())
-  userId    String
-  type      ExportType
-  data      Json?
-  fileUrl   String?
-  createdAt DateTime @default(now())
-  
-  // Relasi
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("exports")
-}
-
-enum ExportType {
-  PDF
-  CSV
-  EXCEL
-}
-
-// Validitas & Reliabilitas
-model ValidityReliability {
-  id                String   @id @default(cuid())
-  questionId        String
-  rHitung           Float
-  rTabel            Float
-  status            String   // "Valid" | "Tidak Valid"
-  cronbachAlpha     Float?
-  cronbachStatus    String?  // "Reliabel" | "Cukup" | "Tidak Reliabel"
-  createdAt         DateTime @default(now())
-  
-  // Relasi
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  
-  @@map("validity_reliability")
-}
-
-// Regresi Analysis
-model Regression {
-  id              String   @id @default(cuid())
-  dimension       String
-  coefficient     Float
-  tValue          Float
-  pValue          Float
-  significance    String   // "Signifikan" | "Tidak Signifikan"
-  rSquared        Float
-  adjustedRSquared Float
-  createdAt       DateTime @default(now())
-  
-  @@map("regressions")
+  @@map("discount_results")
 }

@@ -1,201 +1,226 @@
+// src/app/(protected)/dashboard/page.tsx
 import { prisma } from '@/lib/prisma'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Users, FileText, CheckCircle, TrendingUp, Target, Shield, Layout, Clock, ThumbsUp } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/Card'
+import Nav from '@/components/forms/Nav' // <-- Tambahkan impor Nav
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export default async function DashboardPage() {
-  // Fetch data for dashboard
-  const [
-    totalRespondents,
-    totalSurveys,
-    completedSurveys,
-    respondentsByGender,
-    recentSurveys
-  ] = await Promise.all([
-    prisma.respondent.count(),
-    prisma.survey.count(),
-    prisma.survey.count({ where: { completed: true } }),
-    prisma.respondent.groupBy({
-      by: ['gender'],
-      _count: true
+  // Ambil session untuk role
+  const session = await getServerSession(authOptions)
+  const role = (session?.user?.role as "ADMIN" | "PENELITI") || "PENELITI"
+
+  // ============================================
+  // AMBIL SEMUA DATA YANG DIPERLUKAN DARI DATABASE
+  // ============================================
+  
+  // 1. Total produk
+  const totalProducts = await prisma.product.count()
+  
+  // 2. Rata-rata diskon dari sistem (hasil perhitungan fuzzy)
+  const avgSystem = await prisma.discountResult.aggregate({
+    _avg: { calculatedDiscount: true }
+  })
+
+  // 3. Rata-rata diskon optimal dari produk (data aktual dari CSV)
+  const avgOptimal = await prisma.product.aggregate({
+    _avg: { optimalDiscount: true }
+  })
+
+  // 4. Ambil semua data untuk perhitungan MAE (Mean Absolute Error)
+  const [systemResults, optimalProducts] = await Promise.all([
+    prisma.discountResult.findMany({
+      select: { calculatedDiscount: true }
     }),
-    prisma.survey.findMany({
-      take: 5,
-      where: { completed: true },
-      orderBy: { completedAt: 'desc' },
-      include: {
-        respondent: true,
-        analysis: true
-      }
+    prisma.product.findMany({
+      where: { optimalDiscount: { not: null } },
+      select: { optimalDiscount: true }
     })
   ])
 
-  // Calculate average scores
-  const allAnalyses = await prisma.analysis.findMany()
-  const avgScores = {
-    content: 0,
-    accuracy: 0,
-    format: 0,
-    easeOfUse: 0,
-    timeliness: 0,
-    loyalty: 0
+  // 5. Hitung MAE (Mean Absolute Error)
+  let maeValue = 0
+  const validPairs = Math.min(systemResults.length, optimalProducts.length)
+  
+  if (validPairs > 0) {
+    let totalError = 0
+    for (let i = 0; i < validPairs; i++) {
+      const sys = systemResults[i].calculatedDiscount || 0
+      const opt = optimalProducts[i].optimalDiscount || 0
+      totalError += Math.abs(sys - opt)
+    }
+    maeValue = totalError / validPairs
   }
 
-  if (allAnalyses.length > 0) {
-    avgScores.content = allAnalyses.reduce((sum, a) => sum + a.content, 0) / allAnalyses.length
-    avgScores.accuracy = allAnalyses.reduce((sum, a) => sum + a.accuracy, 0) / allAnalyses.length
-    avgScores.format = allAnalyses.reduce((sum, a) => sum + a.format, 0) / allAnalyses.length
-    avgScores.easeOfUse = allAnalyses.reduce((sum, a) => sum + a.easeOfUse, 0) / allAnalyses.length
-    avgScores.timeliness = allAnalyses.reduce((sum, a) => sum + a.timeliness, 0) / allAnalyses.length
-    avgScores.loyalty = allAnalyses.reduce((sum, a) => sum + a.loyalty, 0) / allAnalyses.length
-  }
+  // 6. Ambil data untuk chart (opsional - 10 produk teratas)
+  const topProducts = await prisma.product.findMany({
+    take: 10,
+    orderBy: { optimalDiscount: 'desc' },
+    select: {
+      name: true,
+      optimalDiscount: true,
+    }
+  })
 
-  const completionRate = totalSurveys > 0 ? (completedSurveys / totalSurveys) * 100 : 0
-  const maleCount = respondentsByGender.find(g => g.gender === 'Laki-laki')?._count || 0
-  const femaleCount = respondentsByGender.find(g => g.gender === 'Perempuan')?._count || 0
+  // ============================================
+  // FORMAT ANGKA UNTUK TAMPILAN
+  // ============================================
+  const sistem = (avgSystem._avg.calculatedDiscount ?? 0).toFixed(1)
+  const aktual = (avgOptimal._avg.optimalDiscount ?? 0).toFixed(1)
+  const selisih = (Math.abs(parseFloat(sistem) - parseFloat(aktual))).toFixed(1)
+  const mae = maeValue.toFixed(2)
+  const totalProduk = totalProducts.toLocaleString('id-ID')
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard Analisis EUCS</h1>
-        <p className="text-gray-600 mt-2">Ringkasan hasil penelitian TikTok Shop</p>
+      {/* Navigasi ditambahkan di sini */}
+      <Nav role={role} />
+
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500">
+          Terakhir diperbarui: {new Date().toLocaleDateString('id-ID')}
+        </p>
       </div>
 
-      {/* Stats Cards */}
+      {/* KARTU STATISTIK UTAMA (4 KARTU) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Kartu 1: Rata-rata Diskon Sistem */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-blue-100">
-                <Users className="w-6 h-6 text-blue-600" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Rata-rata Diskon Sistem</p>
+                <p className="text-3xl font-bold text-blue-600 mt-1">{sistem}%</p>
               </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-500">Total Responden</p>
-                <p className="text-2xl font-bold text-gray-900">{totalRespondents}</p>
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
               </div>
             </div>
+            <p className="text-xs text-gray-400 mt-2">Dari {systemResults.length} hasil perhitungan</p>
           </CardContent>
         </Card>
 
+        {/* Kartu 2: Rata-rata Diskon Aktual */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-green-100">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Rata-rata Diskon Aktual</p>
+                <p className="text-3xl font-bold text-green-600 mt-1">{aktual}%</p>
               </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-500">Completion Rate</p>
-                <p className="text-2xl font-bold text-gray-900">{completionRate.toFixed(1)}%</p>
-                <p className="text-xs text-gray-500">{completedSurveys} dari {totalSurveys}</p>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
               </div>
             </div>
+            <p className="text-xs text-gray-400 mt-2">Dari {totalProducts} produk</p>
           </CardContent>
         </Card>
 
+        {/* Kartu 3: Selisih Rata-rata */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-purple-100">
-                <Users className="w-6 h-6 text-purple-600" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Selisih Rata-rata</p>
+                <p className="text-3xl font-bold text-orange-600 mt-1">{selisih}%</p>
               </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-500">Gender Ratio</p>
-                <p className="text-2xl font-bold text-gray-900">{maleCount}:{femaleCount}</p>
-                <p className="text-xs text-gray-500">Laki : Perempuan</p>
+              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
             </div>
+            <p className="text-xs text-gray-400 mt-2">|{sistem}% - {aktual}%|</p>
           </CardContent>
         </Card>
 
+        {/* Kartu 4: Mean Absolute Error */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-orange-100">
-                <TrendingUp className="w-6 h-6 text-orange-600" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Mean Absolute Error</p>
+                <p className="text-3xl font-bold text-purple-600 mt-1">{mae}%</p>
               </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-500">Avg Loyalty Score</p>
-                <p className="text-2xl font-bold text-gray-900">{avgScores.loyalty.toFixed(1)}/5</p>
-                <p className="text-xs text-gray-500">Skor Loyalitas</p>
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
             </div>
+            <p className="text-xs text-gray-400 mt-2">Berdasarkan {validPairs} data berpasangan</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* EUCS Scores */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Skor Rata-rata Dimensi EUCS</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[
-              { name: 'Content', score: avgScores.content, icon: Target, color: 'bg-blue-100 text-blue-600' },
-              { name: 'Accuracy', score: avgScores.accuracy, icon: Shield, color: 'bg-green-100 text-green-600' },
-              { name: 'Format', score: avgScores.format, icon: Layout, color: 'bg-purple-100 text-purple-600' },
-              { name: 'EaseOfUse', score: avgScores.easeOfUse, icon: TrendingUp, color: 'bg-yellow-100 text-yellow-600' },
-              { name: 'Timeliness', score: avgScores.timeliness, icon: Clock, color: 'bg-red-100 text-red-600' },
-              { name: 'Loyalty', score: avgScores.loyalty, icon: ThumbsUp, color: 'bg-pink-100 text-pink-600' }
-            ].map((dimension) => (
-              <div key={dimension.name} className="text-center">
-                <div className={`inline-flex p-3 rounded-lg ${dimension.color} mb-2`}>
-                  <dimension.icon className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-medium text-gray-900">{dimension.name}</p>
-                <p className="text-xl font-bold text-gray-900">{dimension.score.toFixed(1)}</p>
-                <p className="text-xs text-gray-500">/5</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* RINGKASAN DATABASE */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-gray-700">Total Produk</h3>
+            <p className="text-2xl font-bold text-gray-900">{totalProduk}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-gray-700">Produk dengan Diskon Optimal</h3>
+            <p className="text-2xl font-bold text-gray-900">{optimalProducts.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-gray-700">Hasil Perhitungan Fuzzy</h3>
+            <p className="text-2xl font-bold text-gray-900">{systemResults.length}</p>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Recent Surveys */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Survey Terbaru</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 text-sm font-medium text-gray-500">Responden</th>
-                  <th className="text-left py-3 text-sm font-medium text-gray-500">Tanggal</th>
-                  <th className="text-left py-3 text-sm font-medium text-gray-500">Skor Total</th>
-                  <th className="text-left py-3 text-sm font-medium text-gray-500">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentSurveys.map((survey) => (
-                  <tr key={survey.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3">
-                      <p className="font-medium text-gray-900">{survey.respondent.name}</p>
-                      <p className="text-sm text-gray-500">{survey.respondent.email}</p>
-                    </td>
-                    <td className="py-3">
-                      <p className="text-gray-900">
-                        {survey.completedAt?.toLocaleDateString('id-ID')}
-                      </p>
-                    </td>
-                    <td className="py-3">
-                      <p className="font-bold text-gray-900">
-                        {survey.analysis?.totalScore.toFixed(1) || 'N/A'}
-                      </p>
-                    </td>
-                    <td className="py-3">
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                        Selesai
-                      </span>
-                    </td>
+      {/* 10 PRODUK TERATAS (BERDASARKAN DISKON OPTIMAL) */}
+      {topProducts.length > 0 && (
+        <Card className="mt-6">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Top 10 Produk dengan Diskon Optimal Tertinggi</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">No</th>
+                    <th className="text-left py-2">Nama Produk</th>
+                    <th className="text-right py-2">Diskon Optimal</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {topProducts.map((product, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-2">{index + 1}</td>
+                      <td className="py-2">{product.name || `Produk ${index + 1}`}</td>
+                      <td className="py-2 text-right font-medium text-green-600">
+                        {product.optimalDiscount?.toFixed(1) ?? '0'}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* INFORMASI DATABASE */}
+      <div className="text-sm text-gray-500 mt-4 border-t pt-4">
+        <p>Total data dalam database:</p>
+        <ul className="list-disc list-inside mt-2">
+          <li>Produk: {totalProducts} item</li>
+          <li>Hasil perhitungan fuzzy: {systemResults.length} item</li>
+          <li>Data berpasangan untuk MAE: {validPairs} item</li>
+        </ul>
+      </div>
     </div>
   )
 }

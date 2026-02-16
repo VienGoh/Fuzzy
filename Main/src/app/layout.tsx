@@ -6,8 +6,8 @@ import { Providers } from './(protected)/providers' // <-- Tambahkan ini
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'EUCS System',
-  description: 'End User Computing Satisfaction Analysis',
+  title: 'Fuzzy System',
+  description: 'Fuzzy',
 }
 
 export default function RootLayout({

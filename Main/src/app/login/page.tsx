@@ -5,7 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@eucs.com')
+  const [email, setEmail] = useState('admin@fuzzy.com')
   const [password, setPassword] = useState('password123')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -80,7 +80,7 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Email: admin@eucs.com</p>
+          <p>Email: admin@fuzzy.com</p>
           <p>Password: password123</p>
         </div>
       </div>

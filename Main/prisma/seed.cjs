@@ -5,6 +5,26 @@ const csv = require('csv-parser')
 
 const prisma = new PrismaClient()
 
+// ==================== SEED USER ====================
+const bcrypt = require('bcryptjs') // tambahkan di bagian atas file
+
+async function seedUser() {
+  const salt = await bcrypt.genSalt(10)
+  const hashedPassword = await bcrypt.hash('password123', salt)
+
+  await prisma.user.upsert({
+    where: { email: 'admin@fuzzy.com' },
+    update: {}, // tidak perlu update jika sudah ada
+    create: {
+      email: 'admin@fuzzy.com',
+      password: hashedPassword,
+      name: 'Admin',
+      role: 'ADMIN',
+    },
+  })
+  console.log('✅ User admin berhasil dibuat')
+}
+
 // ==================== FUNGSI FUZZY LOGIC ====================
 function calculateDiscount(stock, demand, loyalty) {
   // Clamp nilai ke rentang yang diharapkan

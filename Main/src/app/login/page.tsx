@@ -39,7 +39,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="w-full max-w-sm p-8 bg-white rounded-lg shadow">
-        <h1 className="text-2xl font-bold mb-6 text-center">Login EUCS</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
         
         {error && (
           <div className="mb-4 p-3 bg-red-50 text-red-700 rounded border border-red-200">

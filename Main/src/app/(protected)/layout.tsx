@@ -71,7 +71,7 @@ export default function ProtectedLayout({
         </main>
 
         <footer className="mt-8 border-t pt-4 text-center text-sm text-gray-500">
-          © 2024 Fuzzy Discount System
+          © 2026 Fuzzy Discount System
         </footer>
       </div>
     )

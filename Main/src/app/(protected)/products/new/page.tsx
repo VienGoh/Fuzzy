@@ -13,7 +13,7 @@ export default function NewProductPage() {
     brand: '',
     season: '',
     originalPrice: '',
-    competitorPrice: ''
+    // competitorPrice dihapus
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,9 +23,12 @@ export default function NewProductPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
+          name: form.name,
+          category: form.category || null,
+          brand: form.brand || null,
+          season: form.season || null,
           originalPrice: parseFloat(form.originalPrice),
-          competitorPrice: form.competitorPrice ? parseFloat(form.competitorPrice) : null
+          // competitorPrice tidak dikirim, API akan mengisi 0
         })
       })
 
@@ -65,10 +68,7 @@ export default function NewProductPage() {
           <label className="block text-sm font-medium text-gray-700">Harga Asli *</label>
           <Input type="number" step="any" required value={form.originalPrice} onChange={e => setForm({...form, originalPrice: e.target.value})} />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Harga Kompetitor</label>
-          <Input type="number" step="any" value={form.competitorPrice} onChange={e => setForm({...form, competitorPrice: e.target.value})} />
-        </div>
+        {/* Field Harga Kompetitor dihapus */}
         <div className="flex gap-4">
           <Button type="submit">Simpan</Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>Batal</Button>

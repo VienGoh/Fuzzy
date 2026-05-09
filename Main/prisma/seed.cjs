@@ -27,33 +27,46 @@ async function seedUser() {
 
 // ==================== FUNGSI FUZZY LOGIC ====================
 function calculateDiscount(stock, demand, loyalty) {
-  // Clamp nilai ke rentang yang diharapkan
-  stock = Math.min(100, Math.max(0, stock))
-  demand = Math.min(100, Math.max(0, demand))
+  // =========================
+  // CLAMP SESUAI DATASET
+  // =========================
+  stock = Math.min(200, Math.max(0, stock))
+  demand = Math.min(500, Math.max(0, demand))
   loyalty = Math.min(5, Math.max(0, loyalty))
 
-  // FUZZIFIKASI STOK
-  const muStockRendah = Math.max(0, Math.min(1, (40 - stock) / 40))
+  // =========================
+  // FUZZIFIKASI STOK (0–200)
+  // =========================
+  const muStockRendah = Math.max(0, Math.min(1, (100 - stock) / 100))
+
   let muStockSedang
-  if (stock <= 30) muStockSedang = 0
-  else if (stock <= 70) muStockSedang = (stock - 30) / 40
-  else muStockSedang = (100 - stock) / 30
+  if (stock <= 50) muStockSedang = 0
+  else if (stock <= 150) muStockSedang = (stock - 50) / 100
+  else muStockSedang = (200 - stock) / 50
   muStockSedang = Math.max(0, Math.min(1, muStockSedang))
 
-  const muStockTinggi = Math.max(0, Math.min(1, (stock - 60) / 40))
+  const muStockTinggi = Math.max(0, Math.min(1, (stock - 100) / 100))
 
-  // FUZZIFIKASI PERMINTAAN
-  const muDemandRendah = Math.max(0, Math.min(1, (40 - demand) / 40))
+
+  // =========================
+  // FUZZIFIKASI PERMINTAAN (0–500)
+  // =========================
+  const muDemandRendah = Math.max(0, Math.min(1, (200 - demand) / 200))
+
   let muDemandSedang
-  if (demand <= 30) muDemandSedang = 0
-  else if (demand <= 70) muDemandSedang = (demand - 30) / 40
-  else muDemandSedang = (100 - demand) / 30
+  if (demand <= 100) muDemandSedang = 0
+  else if (demand <= 300) muDemandSedang = (demand - 100) / 200
+  else muDemandSedang = (500 - demand) / 200
   muDemandSedang = Math.max(0, Math.min(1, muDemandSedang))
 
-  const muDemandTinggi = Math.max(0, Math.min(1, (demand - 60) / 40))
+  const muDemandTinggi = Math.max(0, Math.min(1, (demand - 300) / 200))
 
-  // FUZZIFIKASI LOYALITAS
+
+  // =========================
+  // FUZZIFIKASI LOYALITAS (TIDAK DIUBAH)
+  // =========================
   const muLoyalRendah = Math.max(0, Math.min(1, (2 - loyalty) / 2))
+
   let muLoyalSedang
   if (loyalty <= 2) muLoyalSedang = 0
   else if (loyalty <= 4) muLoyalSedang = (loyalty - 2) / 2
@@ -62,24 +75,30 @@ function calculateDiscount(stock, demand, loyalty) {
 
   const muLoyalTinggi = Math.max(0, Math.min(1, (loyalty - 4) / 1))
 
-  // ATURAN FUZZY
-  const r1 = Math.min(muStockTinggi, muDemandRendah, muLoyalTinggi) // diskon besar
-  const r2 = Math.min(muStockSedang, muDemandRendah)                // diskon sedang
-  const r3 = Math.min(muStockRendah, muDemandTinggi)                // diskon kecil
 
-  // DEFUZZIFIKASI (centroid sederhana)
-  const outputBesar = r1 * 25 // titik tengah 20-30% -> 25%
-  const outputSedang = r2 * 15 // 10-20% -> 15%
-  const outputKecil = r3 * 5   // 0-10% -> 5%
+  // =========================
+  // ATURAN (TIDAK DIUBAH)
+  // =========================
+  const r1 = Math.min(muStockTinggi, muDemandRendah, muLoyalTinggi)
+  const r2 = Math.min(muStockSedang, muDemandRendah)
+  const r3 = Math.min(muStockRendah, muDemandTinggi)
+
+
+  // =========================
+  // DEFUZZIFIKASI (TIDAK DIUBAH)
+  // =========================
+  const outputBesar = r1 * 25
+  const outputSedang = r2 * 15
+  const outputKecil = r3 * 5
 
   const totalWeight = r1 + r2 + r3
+
   let discount = totalWeight > 0
     ? (outputBesar + outputSedang + outputKecil) / totalWeight
-    : 10 // fallback jika tidak ada aturan aktif
+    : 10
 
-  return Math.round(discount * 100) / 100 // bulatkan 2 desimal
+  return Math.round(discount * 100) / 100
 }
-
 // ==================== MAIN ====================
 async function main() {
   const results = []

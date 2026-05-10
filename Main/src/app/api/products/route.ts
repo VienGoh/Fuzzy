@@ -20,37 +20,39 @@ export async function GET(request: Request) {
         }
       : {}
 
-    if (simple) {
-      // MODE SIMPLE: hanya ambil field yang diperlukan (paling ringan)
-      const products = await prisma.product.findMany({
-        where,
+if (simple) {
+  const products = await prisma.product.findMany({
+    where,
+    select: {
+      id: true,
+      productId: true,
+      name: true,
+      brand: true,
+      category: true,
+      metrics: {
         select: {
-          id: true,
-          productId: true,
-          name: true,
-          brand: true,
-          category: true,
-          metrics: {
-            select: { stockLevel: true },
-          },
+          stockLevel: true,
+          customerRatings: true, // ✅ tambahan
         },
-        orderBy: { name: 'asc' },
-        take: limit,
-      })
+      },
+    },
+    orderBy: { name: 'asc' },
+    take: limit,
+  })
 
-      const simplified = products.map((p) => ({
-        id: p.id,
-        productId: p.productId,
-        name: p.name,
-        brand: p.brand,
-        category: p.category,
-        stockLevel: p.metrics?.stockLevel ?? 0,
-      }))
-      return NextResponse.json(simplified)
-    }
+  const simplified = products.map((p) => ({
+    id: p.id,
+    productId: p.productId,
+    name: p.name,
+    brand: p.brand,
+    category: p.category,
+    stockLevel: p.metrics?.stockLevel ?? 0,
+    customerRatings: p.metrics?.customerRatings ?? null, // ✅ tambahan
+  }))
+  return NextResponse.json(simplified)
+}
 
-    // MODE FULL: ambil semua data, tapi tetap dengan select (tanpa include untuk kontrol)
-    const products = await prisma.product.findMany({
+const products = await prisma.product.findMany({
       where,
       select: {
         id: true,

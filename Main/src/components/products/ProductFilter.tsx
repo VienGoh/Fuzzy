@@ -1,109 +1,149 @@
-"use client"
+// src/components/products/ProductFilter.tsx
+'use client'
 
-import { useState, useMemo } from 'react'
-import { ProductTable } from './ProductTable'
+import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Search, X, Filter } from 'lucide-react'
 
-interface Product {
-  id: number
-  name: string
-  category?: string | null
-  brand?: string | null
-  originalPrice: number
-  optimalDiscount?: number | null
-}
-
 interface ProductFilterProps {
-  products: Product[]
   categories: string[]
   brands: string[]
+  // Optional: untuk pre-fill nilai dari URL
+  initialFilters?: {
+    search?: string
+    category?: string
+    brand?: string
+    minDiscount?: string
+    maxDiscount?: string
+  }
 }
 
-export function ProductFilter({ products, categories, brands }: ProductFilterProps) {
-  // State untuk input (sementara)
-  const [tempSearch, setTempSearch] = useState('')
-  const [tempCategory, setTempCategory] = useState('')
-  const [tempBrand, setTempBrand] = useState('')
-  const [tempMinDiscount, setTempMinDiscount] = useState('')
-  const [tempMaxDiscount, setTempMaxDiscount] = useState('')
+export function ProductFilter({ 
+  categories, 
+  brands, 
+  initialFilters = {} 
+}: ProductFilterProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  // State untuk filter yang aktif (setelah tombol Terapkan diklik)
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [brand, setBrand] = useState('')
-  const [minDiscount, setMinDiscount] = useState('')
-  const [maxDiscount, setMaxDiscount] = useState('')
+  // State untuk input sementara (belum diterapkan)
+  const [tempSearch, setTempSearch] = useState(initialFilters.search || '')
+  const [tempCategory, setTempCategory] = useState(initialFilters.category || '')
+  const [tempBrand, setTempBrand] = useState(initialFilters.brand || '')
+  const [tempMinDiscount, setTempMinDiscount] = useState(initialFilters.minDiscount || '')
+  const [tempMaxDiscount, setTempMaxDiscount] = useState(initialFilters.maxDiscount || '')
 
+  // 🔥 Apply filters: update URL + reset page ke 1
   const applyFilters = () => {
-    setSearch(tempSearch)
-    setCategory(tempCategory)
-    setBrand(tempBrand)
-    setMinDiscount(tempMinDiscount)
-    setMaxDiscount(tempMaxDiscount)
+    const params = new URLSearchParams(searchParams.toString())
+    
+    // 🔥 PENTING: Reset ke page 1 setiap kali filter berubah
+    params.set('page', '1')
+    
+    // Update/remove params berdasarkan input
+    if (tempSearch) {
+      params.set('search', tempSearch)
+    } else {
+      params.delete('search')
+    }
+    
+    if (tempCategory) {
+      params.set('category', tempCategory)
+    } else {
+      params.delete('category')
+    }
+    
+    if (tempBrand) {
+      params.set('brand', tempBrand)
+    } else {
+      params.delete('brand')
+    }
+    
+    if (tempMinDiscount) {
+      params.set('minDiscount', tempMinDiscount)
+    } else {
+      params.delete('minDiscount')
+    }
+    
+    if (tempMaxDiscount) {
+      params.set('maxDiscount', tempMaxDiscount)
+    } else {
+      params.delete('maxDiscount')
+    }
+    
+    router.push(`/products?${params.toString()}`)
   }
 
+  // 🔥 Reset: hapus semua filter dari URL + reset form
   const resetFilters = () => {
+    // Reset local state
     setTempSearch('')
     setTempCategory('')
     setTempBrand('')
     setTempMinDiscount('')
     setTempMaxDiscount('')
-    setSearch('')
-    setCategory('')
-    setBrand('')
-    setMinDiscount('')
-    setMaxDiscount('')
+    
+    // Reset URL (hapus semua filter params, tetap keep page=1)
+    const params = new URLSearchParams()
+    params.set('page', '1')
+    router.push(`/products?${params.toString()}`)
   }
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      if (search && !product.name.toLowerCase().includes(search.toLowerCase())) return false
-      if (category && product.category !== category) return false
-      if (brand && product.brand !== brand) return false
-      const discount = product.optimalDiscount ?? 0
-      if (minDiscount && discount < parseFloat(minDiscount)) return false
-      if (maxDiscount && discount > parseFloat(maxDiscount)) return false
-      return true
-    })
-  }, [products, search, category, brand, minDiscount, maxDiscount])
+  // Handle enter key pada search input
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      applyFilters()
+    }
+  }
 
   return (
     <div className="space-y-4">
+      {/* Filter Inputs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* Search */}
         <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
           <Input
             placeholder="Cari nama produk..."
             value={tempSearch}
             onChange={(e) => setTempSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             className="pl-8"
           />
         </div>
 
+        {/* Category */}
         <select
           value={tempCategory}
           onChange={(e) => setTempCategory(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+          className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
         >
           <option value="">Semua Kategori</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
           ))}
         </select>
 
+        {/* Brand */}
         <select
           value={tempBrand}
           onChange={(e) => setTempBrand(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+          className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
         >
           <option value="">Semua Brand</option>
-          {brands.map(b => (
-            <option key={b} value={b}>{b}</option>
+          {brands.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
           ))}
         </select>
 
+        {/* Min Discount */}
         <Input
           type="number"
           placeholder="Min diskon %"
@@ -111,8 +151,10 @@ export function ProductFilter({ products, categories, brands }: ProductFilterPro
           onChange={(e) => setTempMinDiscount(e.target.value)}
           min={0}
           max={100}
+          className="h-10"
         />
 
+        {/* Max Discount */}
         <Input
           type="number"
           placeholder="Max diskon %"
@@ -120,10 +162,12 @@ export function ProductFilter({ products, categories, brands }: ProductFilterPro
           onChange={(e) => setTempMaxDiscount(e.target.value)}
           min={0}
           max={100}
+          className="h-10"
         />
       </div>
 
-      <div className="flex justify-between items-center">
+      {/* Actions + Info */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex gap-2">
           <Button onClick={applyFilters} size="sm">
             <Filter className="w-4 h-4 mr-2" />
@@ -134,12 +178,17 @@ export function ProductFilter({ products, categories, brands }: ProductFilterPro
             Reset Filter
           </Button>
         </div>
-        <span className="text-sm text-gray-500">
-          Menampilkan {filteredProducts.length} dari {products.length} produk
-        </span>
+        
+        {/* Badge filter aktif (opsional, untuk UX) */}
+        {(tempSearch || tempCategory || tempBrand || tempMinDiscount || tempMaxDiscount) && (
+          <span className="text-sm text-blue-600 font-medium">
+            Filter belum diterapkan • Klik "Terapkan Filter" untuk update data
+          </span>
+        )}
       </div>
 
-      <ProductTable products={filteredProducts} />
+      {/* ⚠️ ProductTable DIHAPUS dari sini */}
+      {/* Table sekarang dirender di parent page.tsx dengan data dari server */}
     </div>
   )
 }

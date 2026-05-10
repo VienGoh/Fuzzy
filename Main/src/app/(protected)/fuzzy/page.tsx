@@ -1,4 +1,3 @@
-// src/app/(protected)/fuzzy/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -13,6 +12,7 @@ type ProductOption = {
   brand: string | null;
   category: string | null;
   stockLevel: number;
+  customerRatings?: number | null;
 };
 
 export default function FuzzyInputPage() {
@@ -21,7 +21,7 @@ export default function FuzzyInputPage() {
 
   const [stock, setStock] = useState<string>('');
   const [demand, setDemand] = useState<string>('');
-  const [loyalty, setLoyalty] = useState<string>('');
+  const [loyalty, setLoyalty] = useState<string>('0.0'); // default 0.0
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,14 +30,12 @@ export default function FuzzyInputPage() {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [loadingProducts, setLoadingProducts] = useState(true);
 
-  // ✅ Perbaiki: pakai parameter simple=true dan pastikan data array
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const res = await fetch('/api/products?simple=true');
         if (!res.ok) throw new Error('Gagal mengambil produk');
         const data = await res.json();
-        // Pastikan data adalah array
         setProducts(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error(err);
@@ -56,9 +54,55 @@ export default function FuzzyInputPage() {
     const selected = products.find((p) => p.id.toString() === productId);
     if (selected) {
       setStock(selected.stockLevel.toString());
+      if (selected.customerRatings !== undefined && selected.customerRatings !== null) {
+        setLoyalty(selected.customerRatings.toFixed(1));
+      } else {
+        setLoyalty('0.0'); // kosong → 0.0
+      }
     } else {
       setStock('');
+      setLoyalty('0.0');
     }
+  };
+
+  const parseLoyaltyInput = (value: string): number => {
+    let normalized = value.trim().replace(',', '.');
+    normalized = normalized.replace(/[^0-9.-]/g, '');
+    const num = parseFloat(normalized);
+    return isNaN(num) ? NaN : num;
+  };
+
+  const formatToSingleDecimal = (value: number): string => {
+    if (isNaN(value)) return '0.0';
+    let clamped = Math.min(5, Math.max(0, value));
+    return clamped.toFixed(1);
+  };
+
+  const handleLoyaltyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value;
+    let filtered = raw.replace(/[^0-9.,]/g, '');
+    const dots = (filtered.match(/\./g) || []).length;
+    const commas = (filtered.match(/,/g) || []).length;
+    if (dots > 1 || commas > 1) return;
+    if (filtered.includes('..') || filtered.includes(',,')) return;
+
+    let num = parseLoyaltyInput(filtered);
+    if (!isNaN(num) && num > 5) return;
+    setLoyalty(filtered);
+  };
+
+  const handleLoyaltyBlur = () => {
+    if (loyalty.trim() === '') {
+      setLoyalty('0.0'); // kosong → 0.0
+      return;
+    }
+    let num = parseLoyaltyInput(loyalty);
+    if (isNaN(num)) {
+      setLoyalty('0.0');
+      return;
+    }
+    num = Math.min(5, Math.max(0, num));
+    setLoyalty(num.toFixed(1));
   };
 
   if (status === 'loading') return <div>Loading...</div>;
@@ -74,25 +118,22 @@ export default function FuzzyInputPage() {
 
     const stockNum = parseFloat(stock);
     const demandNum = parseFloat(demand);
-    const loyaltyNum = parseFloat(loyalty);
+    let loyaltyNum = parseLoyaltyInput(loyalty);
 
     if (isNaN(stockNum) || stockNum < 0 || stockNum > 200) {
       setError('Stok harus antara 0 - 200');
       setLoading(false);
       return;
     }
-
     if (isNaN(demandNum) || demandNum < 0 || demandNum > 500) {
       setError('Permintaan harus antara 0 - 500');
       setLoading(false);
       return;
     }
-
-    if (isNaN(loyaltyNum) || loyaltyNum < 0 || loyaltyNum > 5) {
-      setError('Loyalitas harus antara 0 - 5');
-      setLoading(false);
-      return;
+    if (isNaN(loyaltyNum)) {
+      loyaltyNum = 0; // fallback
     }
+    loyaltyNum = Math.min(5, Math.max(0, loyaltyNum));
 
     try {
       const res = await fetch('/api/calculate-discount', {
@@ -105,12 +146,10 @@ export default function FuzzyInputPage() {
           productId: selectedProductId ? parseInt(selectedProductId) : null,
         }),
       });
-
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.message || 'Gagal menghitung diskon');
       }
-
       const data = await res.json();
       setResult(data);
     } catch (err: any) {
@@ -123,7 +162,7 @@ export default function FuzzyInputPage() {
   const handleReset = () => {
     setStock('');
     setDemand('');
-    setLoyalty('');
+    setLoyalty('0.0'); // reset ke 0.0
     setSelectedProductId('');
     setResult(null);
     setError(null);
@@ -149,6 +188,7 @@ export default function FuzzyInputPage() {
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name} {product.brand ? `- ${product.brand}` : ''} (Stok: {product.stockLevel})
+                  {product.customerRatings ? `, Rating: ${product.customerRatings.toFixed(1)}` : ''}
                 </option>
               ))}
             </select>
@@ -189,15 +229,16 @@ export default function FuzzyInputPage() {
             <label className="block text-gray-700 text-sm font-bold mb-2">Loyalitas Pelanggan (0 - 5)</label>
             <input
               className="shadow border rounded w-full py-2 px-3"
-              type="number"
-              step="any"
-              min="0"
-              max="5"
+              type="text"
               value={loyalty}
-              onChange={(e) => setLoyalty(e.target.value)}
-              placeholder="Contoh: 4.5"
+              onChange={handleLoyaltyChange}
+              onBlur={handleLoyaltyBlur}
+              placeholder="Contoh: 4.1 atau 4,1"
               required
             />
+            <p className="text-gray-500 text-xs mt-1">
+              Masukkan angka 0 - 5 (satu desimal, misal 4.1). Kosong akan diisi 0.0.
+            </p>
           </div>
 
           <div className="flex justify-between">
@@ -233,4 +274,4 @@ export default function FuzzyInputPage() {
       </div>
     </>
   );
-}   
+}
